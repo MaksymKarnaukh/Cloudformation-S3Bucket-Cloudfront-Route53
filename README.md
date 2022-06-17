@@ -9,4 +9,4 @@ Cloudformation template
 
 ## How to use it
  - Upload YAML template to AWS Cloudformation 
- - Upload HTML file(or your files) to AWS S3 Bucket that was created
+ - Upload Simple HTML file(or your files) to AWS S3 Bucket that was created
