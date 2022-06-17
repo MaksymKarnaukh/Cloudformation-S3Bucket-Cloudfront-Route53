@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "Creating S3, Cloudfront, Route53"
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: The DNS name of an existing Amazon Route 53 hosted zone
+  BucketName:
+    Type: String
+    Description: Amazon S3 files bucket name
+  HostedZoneId:
+    Type: String
+    Description: Amazon Route53 Hosted Zone Id for DomainName    
+  CertificateArn:
+   Type: String
+   Description: Certificate Link
+
+
+Resources:
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Join ['', [ !Ref 'BucketName', '-OAI']]
+  
+  S3Bucket:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: "Retain"
+    Properties:
+      AccessControl: "BucketOwnerFullControl"
+      BucketName: !Ref 'BucketName'
+
+  S3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    DependsOn: S3Bucket
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+        - Action: "s3:Get*"
+          Effect: Allow
+          Resource: !Join ['', ['arn:aws:s3:::', !Ref 'S3Bucket', /*]]
+          Principal:
+            CanonicalUser: !GetAtt OriginAccessIdentity.S3CanonicalUserId
+  
+  CloudfrontDistro:
+    Type: "AWS::CloudFront::Distribution"
+    DependsOn:
+    - S3Bucket
+    Properties:
+     DistributionConfig:
+       Aliases:
+       - !Ref DomainName
+       Origins:
+           - DomainName: !Join ['', [!Ref 'BucketName', '.s3.amazonaws.com']]
+             Id: S3Origin
+             S3OriginConfig:
+               OriginAccessIdentity: !Join ["", ["origin-access-identity/cloudfront/", !Ref OriginAccessIdentity]]
+       DefaultRootObject: "index.html"
+       Enabled: 'true'
+       HttpVersion: http2
+       DefaultCacheBehavior:
+         AllowedMethods:
+         - GET
+         - HEAD
+         Compress: true
+         TargetOriginId: S3Origin
+         ForwardedValues:
+           QueryString: true
+           Cookies:
+             Forward: none
+         ViewerProtocolPolicy: redirect-to-https
+        ViewerCertificate:
+         AcmCertificateArn: !Ref CertificateArn
+         SslSupportMethod: "sni-only"
+    
+    DomainDns:
+    Type: "AWS::Route53::RecordSet"
+    DependsOn: CloudfrontDistro
+    Properties:
+      AliasTarget:
+        DNSName: !GetAtt CloudfrontDistro.DomainName
+        HostedZoneId: !Ref HostedZoneId
+      HostedZoneName: !Join ['', [!Ref 'DomainName', .]]
+      Name: !Ref DomainName
+      Type: "A"
+          
+Outputs:
+  Cloudfront:
+    Value: !Ref CloudfrontDistro
+    Description: Cloudfront Distribution ID
+
+    
+            
+         
+
